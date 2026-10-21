@@ -2062,7 +2062,7 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
 
               {/* Real Scannable Barcode */}
               <div className="text-center pt-2 flex justify-center">
-                <div className="inline-block bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
+                <div id="printable-barcode-sticker" className="inline-block bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
                   <BarcodeDisplay value={selectedReturnForPrint.serialNumber} />
                 </div>
               </div>
@@ -2072,14 +2072,15 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setSelectedReturnForPrint(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-100"
+                className="px-4 py-2.5 rounded-xl text-xs font-medium border border-slate-200 text-slate-700 hover:bg-slate-100"
               >
                 Fermer
               </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -2090,7 +2091,7 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
                       printWindow.document.write(`
                         <html>
                           <head>
-                            <title>Fiche - ${selectedReturnForPrint.serialNumber}</title>
+                            <title>Fiche Completes - ${selectedReturnForPrint.serialNumber}</title>
                             <script src="https://cdn.tailwindcss.com"></script>
                           </head>
                           <body className="bg-white p-6">
@@ -2105,10 +2106,106 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
                     }
                   }
                 }}
-                className="px-5 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-2"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 flex items-center justify-center gap-1.5 shadow-2xs"
               >
-                <Printer className="w-4 h-4" />
-                <span>Imprimer la Fiche</span>
+                <Printer className="w-4 h-4 text-slate-600" />
+                <span>Imprimer la Fiche complète</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const barcodeElem = document.getElementById('printable-barcode-sticker');
+                  const svgHtml = barcodeElem ? barcodeElem.innerHTML : '';
+                  const companyName = companySettings?.companyName || 'FACTURAGO';
+                  const productName = selectedReturnForPrint.productName || '';
+                  const serialNumber = selectedReturnForPrint.serialNumber || '';
+
+                  const printWindow = window.open('', '', 'width=450,height=450');
+                  if (printWindow) {
+                    printWindow.document.write(`
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <title>Sticker Code-Barres - ${serialNumber}</title>
+                          <style>
+                            @page {
+                              size: auto;
+                              margin: 0mm;
+                            }
+                            body {
+                              font-family: system-ui, -apple-system, sans-serif;
+                              margin: 0;
+                              padding: 12px;
+                              display: flex;
+                              flex-direction: column;
+                              align-items: center;
+                              justify-content: center;
+                              text-align: center;
+                              background: #ffffff;
+                              color: #000000;
+                            }
+                            .sticker-card {
+                              border: 1.5px dashed #000000;
+                              border-radius: 8px;
+                              padding: 10px 14px;
+                              display: inline-block;
+                              background: #ffffff;
+                              max-width: 260px;
+                            }
+                            .company {
+                              font-size: 10px;
+                              font-weight: 800;
+                              text-transform: uppercase;
+                              letter-spacing: 0.5px;
+                              color: #333333;
+                              margin-bottom: 2px;
+                            }
+                            .product {
+                              font-size: 12px;
+                              font-weight: bold;
+                              margin-bottom: 6px;
+                              color: #000000;
+                              word-break: break-word;
+                            }
+                            .barcode-box {
+                              display: flex;
+                              justify-content: center;
+                              align-items: center;
+                            }
+                            .barcode-box svg {
+                              max-width: 100%;
+                              height: auto;
+                              display: block;
+                            }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="sticker-card">
+                            <div class="company">${companyName}</div>
+                            <div class="product">${productName}</div>
+                            <div class="barcode-box">
+                              ${svgHtml}
+                            </div>
+                          </div>
+                          <script>
+                            window.onload = function() {
+                              setTimeout(function() {
+                                window.print();
+                                window.close();
+                              }, 250);
+                            };
+                          </script>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-1.5"
+              >
+                <Barcode className="w-4 h-4" />
+                <span>🏷️ Imprimer Code-Barres (Sticker)</span>
               </button>
             </div>
           </div>
