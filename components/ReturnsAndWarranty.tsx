@@ -2182,8 +2182,6 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
                         </head>
                         <body>
                           <div class="sticker-card">
-                            <div class="company">${companyName}</div>
-                            <div class="product">${productName}</div>
                             <div class="barcode-box">
                               ${svgHtml}
                             </div>
