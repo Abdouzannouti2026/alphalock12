@@ -39,16 +39,22 @@ const BarcodeDisplay: React.FC<{ value: string; className?: string }> = ({ value
       try {
         JsBarcode(svgRef.current, value, {
           format: 'CODE128',
-          width: 2,
-          height: 48,
+          width: 2.2,
+          height: 50,
           displayValue: true,
           fontOptions: 'bold',
           font: 'monospace',
-          fontSize: 12,
+          fontSize: 13,
           margin: 6,
           background: '#ffffff',
           lineColor: '#000000'
         });
+        if (svgRef.current) {
+          svgRef.current.setAttribute('shape-rendering', 'crispEdges');
+          svgRef.current.querySelectorAll('rect').forEach(r => {
+            r.setAttribute('shape-rendering', 'crispEdges');
+          });
+        }
       } catch (err) {
         console.warn('Barcode generation warning:', err);
       }
@@ -61,6 +67,16 @@ const BarcodeDisplay: React.FC<{ value: string; className?: string }> = ({ value
     </div>
   );
 };
+
+const STICKER_SIZES = {
+  '50x30': { width: '50mm', height: '30mm', label: '50 × 30 mm (Standard)', barWidth: 2.1, barHeight: 48, fontSize: 13 },
+  '40x25': { width: '40mm', height: '25mm', label: '40 × 25 mm (Compact)', barWidth: 1.7, barHeight: 38, fontSize: 11 },
+  '58x40': { width: '58mm', height: '40mm', label: '58 × 40 mm (Rouleau 58mm)', barWidth: 2.4, barHeight: 62, fontSize: 14 },
+  '60x40': { width: '60mm', height: '40mm', label: '60 × 40 mm (Moyen)', barWidth: 2.5, barHeight: 64, fontSize: 15 },
+  '70x35': { width: '70mm', height: '35mm', label: '70 × 35 mm (Grand)', barWidth: 2.7, barHeight: 54, fontSize: 15 },
+} as const;
+
+type StickerFormatKey = keyof typeof STICKER_SIZES;
 
 interface ReturnsAndWarrantyProps {
   returns: WarrantyReturn[];
@@ -98,6 +114,7 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
   
   // Modal for Print / View Details
   const [selectedReturnForPrint, setSelectedReturnForPrint] = useState<WarrantyReturn | null>(null);
+  const [stickerFormat, setStickerFormat] = useState<StickerFormatKey>('50x30');
   
   // Modal for Status Edit
   const [editingReturn, setEditingReturn] = useState<WarrantyReturn | null>(null);
@@ -106,12 +123,6 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
   // Modal for Delete Confirmation
   const [deletingReturnItem, setDeletingReturnItem] = useState<WarrantyReturn | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Modal for Duplicate Record Blocked
-  const [duplicateBlockedModal, setDuplicateBlockedModal] = useState<{
-    existingRecord: WarrantyReturn;
-    targetTab: 'warranty_form' | 'return_form';
-  } | null>(null);
 
   const handleConfirmDelete = async () => {
     if (!deletingReturnItem) return;
@@ -173,44 +184,6 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Helper: Find existing warranty or return record for a client and product/serial number
-  const findExistingRecord = (clientName: string, productName: string, serialNumber: string) => {
-    const cleanClient = (clientName || '').trim().toLowerCase();
-    const cleanProduct = (productName || '').trim().toLowerCase();
-    const cleanSerial = (serialNumber || '').trim().toLowerCase();
-
-    if (!cleanClient && !cleanProduct && !cleanSerial) return null;
-
-    return returns.find(r => {
-      const rSerial = (r.serialNumber || '').trim().toLowerCase();
-      const rClient = (r.clientName || '').trim().toLowerCase();
-      const rProduct = (r.productName || '').trim().toLowerCase();
-
-      // Priority 1: Match by exact serial number if present
-      if (cleanSerial && rSerial && cleanSerial === rSerial) {
-        return true;
-      }
-
-      // Priority 2: Match by same client AND same product name
-      if (cleanClient && cleanProduct && rClient === cleanClient && rProduct === cleanProduct) {
-        return true;
-      }
-
-      return false;
-    });
-  };
-
-  // Live duplicate detection
-  const existingWarrantyDuplicate = useMemo(() => {
-    if (activeTab !== 'warranty_form') return null;
-    return findExistingRecord(warrantyForm.clientName, warrantyForm.productName, warrantyForm.serialNumber);
-  }, [returns, activeTab, warrantyForm.clientName, warrantyForm.productName, warrantyForm.serialNumber]);
-
-  const existingReturnDuplicate = useMemo(() => {
-    if (activeTab !== 'return_form') return null;
-    return findExistingRecord(returnForm.clientName, returnForm.productName, returnForm.serialNumber);
-  }, [returns, activeTab, returnForm.clientName, returnForm.productName, returnForm.serialNumber]);
 
   // Dropdown States for Product & Client Selectors
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
@@ -382,16 +355,6 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
       return;
     }
 
-    // CHECK FOR DUPLICATE RECORD!
-    const existing = findExistingRecord(warrantyForm.clientName, warrantyForm.productName, warrantyForm.serialNumber);
-    if (existing) {
-      setDuplicateBlockedModal({
-        existingRecord: existing,
-        targetTab: 'warranty_form'
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const returnCode = `GAR-${String(returns.length + 1).padStart(5, '0')}`;
@@ -442,16 +405,6 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
     e.preventDefault();
     if (!returnForm.clientName || !returnForm.productName || !returnForm.serialNumber) {
       alert("Veuillez remplir les champs obligatoires (Client, Produit, N° de Série)");
-      return;
-    }
-
-    // CHECK FOR DUPLICATE RECORD!
-    const existing = findExistingRecord(returnForm.clientName, returnForm.productName, returnForm.serialNumber);
-    if (existing) {
-      setDuplicateBlockedModal({
-        existingRecord: existing,
-        targetTab: 'return_form'
-      });
       return;
     }
 
@@ -1446,50 +1399,6 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
               </div>
             </div>
 
-            {/* LIVE DUPLICATE WARNING */}
-            {existingWarrantyDuplicate && (
-              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border-2 border-amber-300 dark:border-amber-700/80 space-y-3 animate-in fade-in">
-                <div className="flex items-start gap-3">
-                  <ShieldAlert className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <div className="font-bold text-amber-900 dark:text-amber-200 text-sm">
-                      ⚠️ Ce produit est déjà enregistré pour ce client !
-                    </div>
-                    <div className="text-xs text-amber-800 dark:text-amber-300">
-                      Un dossier existe déjà : <span className="font-semibold">{existingWarrantyDuplicate.clientName}</span> - <span className="font-semibold">{existingWarrantyDuplicate.productName}</span> ({existingWarrantyDuplicate.serialNumber})
-                      <br />
-                      Statut actuel : <span className="font-bold underline">{existingWarrantyDuplicate.status}</span> (Code: {existingWarrantyDuplicate.returnCode})
-                    </div>
-                    <p className="text-2xs text-amber-700 dark:text-amber-400 italic mt-1">
-                      لا يمكنك إنشاء ملف ضمانة جديد مكرر لنفس الشخص والمنتج. يمكنك تغيير حالة الملف الحالي مباشرًة.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingReturn(existingWarrantyDuplicate);
-                      setNewStatus(existingWarrantyDuplicate.status);
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs shadow-xs"
-                  >
-                    ✏️ Modifier le statut de ce dossier
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchTerm(existingWarrantyDuplicate.serialNumber || existingWarrantyDuplicate.clientName);
-                      setActiveTab('list');
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-medium text-xs hover:bg-amber-100/50"
-                  >
-                    🔍 Voir le dossier dans le registre
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="pt-4 flex justify-end">
               <button
                 type="submit"
@@ -1853,50 +1762,6 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
               </div>
             </div>
 
-            {/* LIVE DUPLICATE WARNING */}
-            {existingReturnDuplicate && (
-              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border-2 border-amber-300 dark:border-amber-700/80 space-y-3 animate-in fade-in">
-                <div className="flex items-start gap-3">
-                  <ShieldAlert className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <div className="font-bold text-amber-900 dark:text-amber-200 text-sm">
-                      ⚠️ Ce produit/client possède déjà un dossier enregistré !
-                    </div>
-                    <div className="text-xs text-amber-800 dark:text-amber-300">
-                      Dossier existant : <span className="font-semibold">{existingReturnDuplicate.clientName}</span> - <span className="font-semibold">{existingReturnDuplicate.productName}</span> ({existingReturnDuplicate.serialNumber})
-                      <br />
-                      Statut actuel : <span className="font-bold underline">{existingReturnDuplicate.status}</span> (Code: {existingReturnDuplicate.returnCode})
-                    </div>
-                    <p className="text-2xs text-amber-700 dark:text-amber-400 italic mt-1">
-                      لا يمكنك إعادة تسجيل retour جديد لنفس الجهاز. يمكنك تحديث حالة الملف الحالي (مثلاً إلى En cours, Réparé, Échangé...).
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingReturn(existingReturnDuplicate);
-                      setNewStatus(existingReturnDuplicate.status);
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs shadow-xs"
-                  >
-                    ✏️ Modifier le statut de ce dossier
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchTerm(existingReturnDuplicate.serialNumber || existingReturnDuplicate.clientName);
-                      setActiveTab('list');
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-medium text-xs hover:bg-amber-100/50"
-                  >
-                    🔍 Voir le dossier dans le registre
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="pt-4 flex justify-end">
               <button
                 type="submit"
@@ -2072,11 +1937,28 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
               </div>
             </div>
 
+            {/* STICKER FORMAT SELECTION BAR */}
+            <div className="bg-slate-50 dark:bg-slate-700/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium">
+                <Tag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Format de l'étiquette (Sticker) :</span>
+              </div>
+              <select
+                value={stickerFormat}
+                onChange={e => setStickerFormat(e.target.value as StickerFormatKey)}
+                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+              >
+                {Object.entries(STICKER_SIZES).map(([key, cfg]) => (
+                  <option key={key} value={key}>{cfg.label}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setSelectedReturnForPrint(null)}
-                className="px-4 py-2.5 rounded-xl text-xs font-medium border border-slate-200 text-slate-700 hover:bg-slate-100"
+                className="px-4 py-2.5 rounded-xl text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 Fermer
               </button>
@@ -2106,92 +1988,113 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
                     }
                   }
                 }}
-                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 flex items-center justify-center gap-1.5 shadow-2xs"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700 flex items-center justify-center gap-1.5 shadow-2xs"
               >
-                <Printer className="w-4 h-4 text-slate-600" />
+                <Printer className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                 <span>Imprimer la Fiche complète</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-                  const barcodeElem = document.getElementById('printable-barcode-sticker');
-                  const svgHtml = barcodeElem ? barcodeElem.innerHTML : '';
-                  const companyName = companySettings?.companyName || 'FACTURAGO';
-                  const productName = selectedReturnForPrint.productName || '';
-                  const serialNumber = selectedReturnForPrint.serialNumber || '';
+                  const serialNumber = (selectedReturnForPrint.serialNumber || '').trim();
+                  if (!serialNumber) return;
+                  const sizeConfig = STICKER_SIZES[stickerFormat] || STICKER_SIZES['50x30'];
 
-                  const printWindow = window.open('', '', 'width=450,height=450');
+                  // Generate dedicated high-definition vector barcode SVG for exact sticker dimensions
+                  const tempSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                  try {
+                    JsBarcode(tempSvg, serialNumber, {
+                      format: 'CODE128',
+                      width: sizeConfig.barWidth,
+                      height: sizeConfig.barHeight,
+                      displayValue: true,
+                      font: 'monospace',
+                      fontOptions: 'bold',
+                      fontSize: sizeConfig.fontSize,
+                      textMargin: 3,
+                      margin: 4,
+                      background: '#ffffff',
+                      lineColor: '#000000'
+                    });
+                    tempSvg.setAttribute('shape-rendering', 'crispEdges');
+                    tempSvg.querySelectorAll('rect').forEach(r => {
+                      r.setAttribute('shape-rendering', 'crispEdges');
+                    });
+                  } catch (err) {
+                    console.warn('JsBarcode sticker generation warning:', err);
+                  }
+
+                  const svgHtml = tempSvg.outerHTML;
+
+                  const printWindow = window.open('', '_blank', 'width=500,height=400');
                   if (printWindow) {
                     printWindow.document.write(`
                       <!DOCTYPE html>
                       <html>
                         <head>
-                          <title>Sticker Code-Barres - ${serialNumber}</title>
+                          <meta charset="utf-8">
+                          <title>Sticker - ${serialNumber}</title>
                           <style>
                             @page {
-                              size: auto;
+                              size: ${sizeConfig.width} ${sizeConfig.height};
                               margin: 0mm;
                             }
-                            body {
-                              font-family: system-ui, -apple-system, sans-serif;
+                            * {
+                              box-sizing: border-box;
+                              -webkit-print-color-adjust: exact !important;
+                              print-color-adjust: exact !important;
+                            }
+                            html, body {
+                              width: ${sizeConfig.width};
+                              height: ${sizeConfig.height};
                               margin: 0;
-                              padding: 12px;
+                              padding: 0;
+                              background: #ffffff;
                               display: flex;
-                              flex-direction: column;
                               align-items: center;
                               justify-content: center;
-                              text-align: center;
-                              background: #ffffff;
-                              color: #000000;
+                              overflow: hidden;
                             }
-                            .sticker-card {
-                              border: 1.5px dashed #000000;
-                              border-radius: 8px;
-                              padding: 10px 14px;
-                              display: inline-block;
-                              background: #ffffff;
-                              max-width: 260px;
-                            }
-                            .company {
-                              font-size: 10px;
-                              font-weight: 800;
-                              text-transform: uppercase;
-                              letter-spacing: 0.5px;
-                              color: #333333;
-                              margin-bottom: 2px;
-                            }
-                            .product {
-                              font-size: 12px;
-                              font-weight: bold;
-                              margin-bottom: 6px;
-                              color: #000000;
-                              word-break: break-word;
-                            }
-                            .barcode-box {
+                            .sticker-sheet {
+                              width: ${sizeConfig.width};
+                              height: ${sizeConfig.height};
                               display: flex;
-                              justify-content: center;
                               align-items: center;
+                              justify-content: center;
+                              padding: 1.5mm 2.5mm;
+                              margin: 0;
+                              background: #ffffff;
+                              overflow: hidden;
                             }
-                            .barcode-box svg {
+                            .sticker-sheet svg {
+                              width: 100%;
+                              height: 100%;
                               max-width: 100%;
-                              height: auto;
+                              max-height: 100%;
                               display: block;
+                              shape-rendering: crispEdges !important;
+                            }
+                            .sticker-sheet svg rect {
+                              shape-rendering: crispEdges !important;
+                            }
+                            .sticker-sheet svg text {
+                              font-family: monospace, Courier, monospace !important;
+                              font-weight: bold !important;
+                              letter-spacing: 0.5px;
                             }
                           </style>
                         </head>
                         <body>
-                          <div class="sticker-card">
-                            <div class="barcode-box">
-                              ${svgHtml}
-                            </div>
+                          <div class="sticker-sheet">
+                            ${svgHtml}
                           </div>
                           <script>
                             window.onload = function() {
                               setTimeout(function() {
                                 window.print();
                                 window.close();
-                              }, 250);
+                              }, 150);
                             };
                           </script>
                         </body>
@@ -2201,83 +2104,10 @@ export const ReturnsAndWarranty: React.FC<ReturnsAndWarrantyProps> = ({
                   }
                 }}
                 className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-1.5"
+                title={`Imprimer au format ${STICKER_SIZES[stickerFormat]?.label}`}
               >
                 <Barcode className="w-4 h-4" />
-                <span>🏷️ Imprimer Code-Barres (Sticker)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DUPLICATE BLOCKED MODAL */}
-      {duplicateBlockedModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-2.5 text-amber-600 dark:text-amber-400 font-bold text-lg">
-                <ShieldAlert className="w-6 h-6" />
-                <span>Création bloquée : Dossier déjà existant</span>
-              </div>
-              <button
-                onClick={() => setDuplicateBlockedModal(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs space-y-2">
-              <p className="font-semibold text-sm">
-                Il est impossible de créer un deuxième dossier pour le même client et le même produit.
-              </p>
-              <p className="text-amber-800 dark:text-amber-300">
-                هذا المنتج والزبون مسجلان بالفعل في النظام. لا يمكن تكرار إنشاء ملف جديد لنفس الشخص ونفس المنتج. يمكنك تغيير حالة الملف الحالي بدلاً من ذلك.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 space-y-2.5 text-sm">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Dossier existant trouvé</div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-slate-400">Code:</span> <span className="font-mono font-bold text-slate-900 dark:text-white">{duplicateBlockedModal.existingRecord.returnCode}</span></div>
-                <div><span className="text-slate-400">Statut:</span> <span className="font-bold text-emerald-600 dark:text-emerald-400">{duplicateBlockedModal.existingRecord.status}</span></div>
-                <div><span className="text-slate-400">Client:</span> <span className="font-semibold text-slate-900 dark:text-white">{duplicateBlockedModal.existingRecord.clientName}</span></div>
-                <div><span className="text-slate-400">Produit:</span> <span className="font-semibold text-slate-900 dark:text-white">{duplicateBlockedModal.existingRecord.productName}</span></div>
-                <div className="col-span-2"><span className="text-slate-400">N° Série / Code:</span> <span className="font-mono text-slate-900 dark:text-white">{duplicateBlockedModal.existingRecord.serialNumber}</span></div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setDuplicateBlockedModal(null)}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-700"
-              >
-                Fermer
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const rec = duplicateBlockedModal.existingRecord;
-                  setDuplicateBlockedModal(null);
-                  setSearchTerm(rec.serialNumber || rec.clientName);
-                  setActiveTab('list');
-                }}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold"
-              >
-                🔍 Voir dans le registre
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const rec = duplicateBlockedModal.existingRecord;
-                  setDuplicateBlockedModal(null);
-                  setEditingReturn(rec);
-                  setNewStatus(rec.status);
-                }}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs"
-              >
-                ✏️ Modifier le statut actuel
+                <span>🏷️ Imprimer Sticker ({STICKER_SIZES[stickerFormat]?.width})</span>
               </button>
             </div>
           </div>
